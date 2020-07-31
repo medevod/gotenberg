@@ -68,6 +68,7 @@ func (a *API) Provision(flags core.ParsedFlags) error {
 func (a *API) Validate() error {
 	var err core.ErrorArray
 
+	// TODO: migrate common validations to a dedicated package.
 	if a.Port < 1 || a.Port > 65535 {
 		err = append(err,
 			errors.New("port must be more than 1 and less than 65535"),
@@ -106,11 +107,11 @@ func (a *API) Validate() error {
 }
 
 func (a *API) Start() error {
-	// TODO try prefork setting.
+	// TODO: try prefork setting.
 	a.srv = fiber.New(&fiber.Settings{
-		DisableStartupMessage: false,
+		DisableStartupMessage: false, // TODO: remove.
 		//DisableStartupMessage: true,
-		BodyLimit:    a.BodyLimit * 1024 * 1024,
+		BodyLimit:    a.BodyLimit * 1024 * 1024, // TODO: bytes?
 		ReadTimeout:  time.Duration(a.ReadTimeout*1000) * time.Millisecond,
 		WriteTimeout: time.Duration(a.WriteTimeout*1000) * time.Millisecond,
 	})
