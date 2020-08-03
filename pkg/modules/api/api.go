@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber"
@@ -12,7 +13,7 @@ import (
 )
 
 func init() {
-	core.RegisterModule(API{})
+	core.MustRegisterModule(API{})
 }
 
 type API struct {
@@ -50,7 +51,7 @@ func (a *API) Provision(flags core.ParsedFlags) error {
 	a.ReadTimeout = flags.MustFloat("api-read-timeout")
 	a.ProcessTimeout = flags.MustFloat("api-process-timeout")
 	a.WriteTimeout = flags.MustFloat("api-write-timeout")
-	a.RootPath = flags.MustString("api-root-path")
+	a.RootPath = strings.ToLower(flags.MustString("api-root-path"))
 
 	// As the root path must begin and end with a slash,
 	// we correct its value if necessary.
@@ -66,41 +67,41 @@ func (a *API) Provision(flags core.ParsedFlags) error {
 }
 
 func (a *API) Validate() error {
-	var err core.ErrorArray
+	var errs core.ErrorArray
 
 	// TODO: migrate common validations to a dedicated package.
 	if a.Port < 1 || a.Port > 65535 {
-		err = append(err,
+		errs = append(errs,
 			errors.New("port must be more than 1 and less than 65535"),
 		)
 	}
 
 	if a.BodyLimit <= 0 {
-		err = append(err,
+		errs = append(errs,
 			errors.New("body limit must be more than 0"),
 		)
 	}
 
 	if a.ReadTimeout <= 0 {
-		err = append(err,
+		errs = append(errs,
 			errors.New("read timeout must be more than 0"),
 		)
 	}
 
 	if a.ProcessTimeout <= 0 {
-		err = append(err,
+		errs = append(errs,
 			errors.New("process timeout must be more than 0"),
 		)
 	}
 
 	if a.WriteTimeout <= 0 {
-		err = append(err,
+		errs = append(errs,
 			errors.New("write timeout must be more than 0"),
 		)
 	}
 
-	if len(err) > 0 {
-		return err
+	if len(errs) > 0 {
+		return errs
 	}
 
 	return nil
@@ -116,20 +117,84 @@ func (a *API) Start() error {
 		WriteTimeout: time.Duration(a.WriteTimeout*1000) * time.Millisecond,
 	})
 
-	a.srv.Get(a.withRootPath("foo"), func(c *fiber.Ctx) {
-		c.Send("Bar")
-	})
+	// Add routes from other modules.
+	routesMu.Lock()
+	defer routesMu.Unlock()
+
+	for _, route := range routes {
+		a.srv.Add(
+			route.Method,
+			fmt.Sprintf("%s%s", a.RootPath, route.Path),
+			route.Handlers...,
+		)
+	}
+
+	core.Log().Error("error message")
+	core.Log().Warn("warn message")
+	core.Log().Info("info message")
+	core.Log().Debug("debug message")
 
 	return a.srv.Listen(a.Port)
-}
-
-func (a *API) withRootPath(path string) string {
-	return fmt.Sprintf("%s%s", a.RootPath, path)
 }
 
 func (a *API) Stop() error {
 	return a.srv.Shutdown()
 }
+
+type Route struct {
+	Path     string
+	Method   string
+	Handlers []fiber.Handler
+}
+
+func RegisterRoute(route *Route) error {
+	if route.Path == "" {
+		return errors.New("route with empty path cannot be registered")
+	}
+
+	// Fiber panics if a route is using an
+	// invalid method. Therefore, we check
+	// first that the given method is valid.
+	validMethods := []string{
+		fiber.MethodConnect,
+		fiber.MethodDelete,
+		fiber.MethodGet,
+		fiber.MethodHead,
+		fiber.MethodOptions,
+		fiber.MethodPatch,
+		fiber.MethodPost,
+		fiber.MethodPut,
+		fiber.MethodTrace,
+	}
+
+	isValidMethod := false
+	for _, method := range validMethods {
+		if method == route.Method {
+			isValidMethod = true
+			break
+		}
+	}
+
+	if !isValidMethod {
+		return fmt.Errorf("method '%s' from route '%s' is invalid", route.Method, route.Path)
+	}
+
+	routesMu.Lock()
+	defer routesMu.Unlock()
+
+	if _, ok := routes[route.Path]; ok {
+		return fmt.Errorf("route '%s' is already registered", route.Path)
+	}
+
+	routes[route.Path] = route
+
+	return nil
+}
+
+var (
+	routes   = make(map[string]*Route)
+	routesMu sync.RWMutex
+)
 
 // Interface guards.
 var (

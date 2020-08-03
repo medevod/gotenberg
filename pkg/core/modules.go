@@ -2,9 +2,10 @@ package core
 
 import (
 	"fmt"
-	flag "github.com/spf13/pflag"
 	"sort"
 	"sync"
+
+	flag "github.com/spf13/pflag"
 )
 
 type Module interface {
@@ -21,12 +22,17 @@ type ModuleDescriptor struct {
 
 	// FlagSet is the definition of the flags
 	// of the module.
+	// Optional.
 	FlagSet *flag.FlagSet
 
 	// New returns a new and empty instance of
 	// the module's type.
 	// Required.
 	New func() Module
+}
+
+type RegistrationValidator interface {
+	ValidateOnRegistration() error
 }
 
 type Provisioner interface {
@@ -37,13 +43,21 @@ type Validator interface {
 	Validate() error
 }
 
+type CoreModifier interface {
+	ModifyCore() error
+}
+
+type Dependency interface {
+	Inject() error
+}
+
 type App interface {
 	Start() error
 	Stop() error
 }
 
-func RegisterModule(m Module) {
-	desc := m.Descriptor()
+func MustRegisterModule(mod Module) {
+	desc := mod.Descriptor()
 
 	if desc.ID == "" {
 		panic("module with an empty ID cannot be registered")
@@ -61,7 +75,14 @@ func RegisterModule(m Module) {
 	defer modulesMu.Unlock()
 
 	if _, ok := modules[string(desc.ID)]; ok {
-		panic(fmt.Sprintf("module '%s' is already registered", desc.ID))
+		panic(fmt.Sprintf("%s module is already registered", desc.ID))
+	}
+
+	if v, ok := mod.(RegistrationValidator); ok {
+		err := v.ValidateOnRegistration()
+		if err != nil {
+			panic(fmt.Sprintf("%s module validation failed on registration: %s", desc.ID, err))
+		}
 	}
 
 	modules[string(desc.ID)] = desc

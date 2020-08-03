@@ -23,6 +23,7 @@ func Run() {
 	err := fs.Parse(os.Args[1:])
 	if err != nil {
 		fmt.Println(err)
+		// TODO: use dedicated exit codes.
 		os.Exit(1)
 	}
 
@@ -30,27 +31,38 @@ func Run() {
 	parsedFlags := core.ParsedFlags{FlagSet: fs}
 
 	// Initializes module's instances.
-	var (
-		instances []core.Module
-		apps      []core.App
-	)
+	var apps []core.App
 	for _, mod := range mods {
 		instance := mod.New()
-		instances = append(instances, instance)
 
 		if p, ok := instance.(core.Provisioner); ok {
 			err := p.Provision(parsedFlags)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Printf("[FATAL] %s\n", err)
 				os.Exit(1)
 			}
 		}
 
-		// TODO: map all validation errors?
 		if v, ok := instance.(core.Validator); ok {
 			err := v.Validate()
 			if err != nil {
-				fmt.Printf("%s module validation failed: %s\n", mod.ID, err)
+				fmt.Printf("[ERROR] %s module validation failed: %s\n", mod.ID, err)
+				os.Exit(1)
+			}
+		}
+
+		if m, ok := instance.(core.CoreModifier); ok {
+			err := m.ModifyCore()
+			if err != nil {
+				fmt.Printf("[FATAL] %s module failed to modify core: %s\n", mod.ID, err)
+				os.Exit(1)
+			}
+		}
+
+		if d, ok := instance.(core.Dependency); ok {
+			err := d.Inject()
+			if err != nil {
+				fmt.Printf("[FATAL] %s module failed to inject itself as a dependency: %s\n", mod.ID, err)
 				os.Exit(1)
 			}
 		}
@@ -66,6 +78,7 @@ func Run() {
 		go func(a core.App) {
 			err := a.Start()
 			if err != nil {
+				// TODO print module ID.
 				fmt.Println(err)
 			}
 		}(app)
@@ -84,6 +97,7 @@ func Run() {
 		go func(a core.App) {
 			err := a.Stop()
 			if err != nil {
+				// TODO print module ID.
 				fmt.Println(err)
 			}
 		}(app)
