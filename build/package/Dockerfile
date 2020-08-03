@@ -32,10 +32,11 @@ RUN \
     useradd --uid ${GOTENBERG_USER_UID} --gid gotenberg --shell /bin/bash --home /home/gotenberg --no-create-home gotenberg &&\
     mkdir /home/gotenberg &&\
     chown gotenberg: /home/gotenberg &&\
-    # Install dependencies required for the next instructions.
+    # Install dependencies required for the next instructions or debugging.
     # Note: gnupg required by wget.
+    # Note: procps for "top" command (useful when debugging processes).
     apt-get update -qq &&\
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends curl wget gnupg &&\
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends curl wget gnupg procps &&\
     # Install fonts.
     # Credits:
     # https://github.com/arachnys/athenapdf/blob/master/cli/Dockerfile
@@ -94,6 +95,9 @@ RUN \
     google-chrome-stable --version &&\
     libreoffice --version &&\
     unoconv --version
+
+# Environment variables required by modules.
+ENV GS_BIN_PATH="/usr/bin/gs"
 
 USER gotenberg
 WORKDIR /home/gotenberg
