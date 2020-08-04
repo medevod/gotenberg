@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gofiber/fiber"
@@ -24,7 +23,8 @@ type API struct {
 	WriteTimeout   float64
 	RootPath       string
 
-	srv *fiber.App
+	routers []Router
+	srv     *fiber.App
 }
 
 func (API) Descriptor() core.ModuleDescriptor {
@@ -45,7 +45,9 @@ func (API) Descriptor() core.ModuleDescriptor {
 	}
 }
 
-func (a *API) Provision(flags core.ParsedFlags) error {
+func (a *API) Provision(ctx *core.Context) error {
+	flags := ctx.ParsedFlags()
+
 	a.Port = flags.MustInt("api-port")
 	a.BodyLimit = flags.MustInt("api-body-limit")
 	a.ReadTimeout = flags.MustFloat("api-read-timeout")
@@ -61,6 +63,15 @@ func (a *API) Provision(flags core.ParsedFlags) error {
 
 	if !strings.HasSuffix(a.RootPath, "/") {
 		a.RootPath = fmt.Sprintf("%s/", a.RootPath)
+	}
+
+	routers, err := ctx.Modules(new(Router))
+	if err != nil {
+		return err
+	}
+
+	for _, router := range routers {
+		a.routers = append(a.routers, router.(Router))
 	}
 
 	return nil
@@ -100,8 +111,61 @@ func (a *API) Validate() error {
 		)
 	}
 
+	if err := a.validateRouters(); err != nil {
+		errs = append(errs, err)
+	}
+
 	if len(errs) > 0 {
 		return errs
+	}
+
+	return nil
+}
+
+func (a *API) validateRouters() error {
+	routesMap := make(map[string]*Route)
+
+	for _, router := range a.routers {
+		routes := router.Routes()
+
+		for _, route := range routes {
+			if route.Path == "" {
+				return errors.New("route with empty path cannot be registered")
+			}
+
+			// Fiber panics if a route is using an
+			// invalid method. Therefore, we check
+			// first that the given method is valid.
+			validMethods := []string{
+				fiber.MethodConnect,
+				fiber.MethodDelete,
+				fiber.MethodGet,
+				fiber.MethodHead,
+				fiber.MethodOptions,
+				fiber.MethodPatch,
+				fiber.MethodPost,
+				fiber.MethodPut,
+				fiber.MethodTrace,
+			}
+
+			isValidMethod := false
+			for _, method := range validMethods {
+				if method == route.Method {
+					isValidMethod = true
+					break
+				}
+			}
+
+			if !isValidMethod {
+				return fmt.Errorf("method '%s' from route '%s' is invalid", route.Method, route.Path)
+			}
+
+			if _, ok := routesMap[route.Path]; ok {
+				return fmt.Errorf("route '%s' is already registered", route.Path)
+			}
+
+			routesMap[route.Path] = route
+		}
 	}
 
 	return nil
@@ -118,15 +182,14 @@ func (a *API) Start() error {
 	})
 
 	// Add routes from other modules.
-	routesMu.Lock()
-	defer routesMu.Unlock()
-
-	for _, route := range routes {
-		a.srv.Add(
-			route.Method,
-			fmt.Sprintf("%s%s", a.RootPath, route.Path),
-			route.Handlers...,
-		)
+	for _, router := range a.routers {
+		for _, route := range router.Routes() {
+			a.srv.Add(
+				route.Method,
+				fmt.Sprintf("%s%s", a.RootPath, route.Path),
+				route.Handlers...,
+			)
+		}
 	}
 
 	core.Log().Error("error message")
@@ -141,60 +204,15 @@ func (a *API) Stop() error {
 	return a.srv.Shutdown()
 }
 
+type Router interface {
+	Routes() []*Route
+}
+
 type Route struct {
 	Path     string
 	Method   string
 	Handlers []fiber.Handler
 }
-
-func RegisterRoute(route *Route) error {
-	if route.Path == "" {
-		return errors.New("route with empty path cannot be registered")
-	}
-
-	// Fiber panics if a route is using an
-	// invalid method. Therefore, we check
-	// first that the given method is valid.
-	validMethods := []string{
-		fiber.MethodConnect,
-		fiber.MethodDelete,
-		fiber.MethodGet,
-		fiber.MethodHead,
-		fiber.MethodOptions,
-		fiber.MethodPatch,
-		fiber.MethodPost,
-		fiber.MethodPut,
-		fiber.MethodTrace,
-	}
-
-	isValidMethod := false
-	for _, method := range validMethods {
-		if method == route.Method {
-			isValidMethod = true
-			break
-		}
-	}
-
-	if !isValidMethod {
-		return fmt.Errorf("method '%s' from route '%s' is invalid", route.Method, route.Path)
-	}
-
-	routesMu.Lock()
-	defer routesMu.Unlock()
-
-	if _, ok := routes[route.Path]; ok {
-		return fmt.Errorf("route '%s' is already registered", route.Path)
-	}
-
-	routes[route.Path] = route
-
-	return nil
-}
-
-var (
-	routes   = make(map[string]*Route)
-	routesMu sync.RWMutex
-)
 
 // Interface guards.
 var (

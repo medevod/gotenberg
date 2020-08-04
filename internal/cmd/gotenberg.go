@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -14,9 +15,9 @@ func Run() {
 	fs := flag.NewFlagSet("gotenberg", flag.ExitOnError)
 
 	// Adds the modules flags to the root FlagSet.
-	mods := core.GetModules()
-	for _, mod := range mods {
-		fs.AddFlagSet(mod.FlagSet)
+	descriptors := core.GetModuleDescriptors()
+	for _, desc := range descriptors {
+		fs.AddFlagSet(desc.FlagSet)
 	}
 
 	// Parses the flags...
@@ -28,48 +29,19 @@ func Run() {
 	}
 
 	// ...and creates a wrapper around those.
-	parsedFlags := core.ParsedFlags{FlagSet: fs}
+	parsedFlags := &core.ParsedFlags{FlagSet: fs}
 
-	// Initializes module's instances.
-	var apps []core.App
-	for _, mod := range mods {
-		instance := mod.New()
+	ctx := core.NewContext(context.Background(), parsedFlags)
 
-		if p, ok := instance.(core.Provisioner); ok {
-			err := p.Provision(parsedFlags)
-			if err != nil {
-				fmt.Printf("[FATAL] %s\n", err)
-				os.Exit(1)
-			}
-		}
+	if err := ctx.CoreModifiers(); err != nil {
+		fmt.Printf("[FATAL] %s\n", err)
+		os.Exit(1)
+	}
 
-		if v, ok := instance.(core.Validator); ok {
-			err := v.Validate()
-			if err != nil {
-				fmt.Printf("[ERROR] %s module validation failed: %s\n", mod.ID, err)
-				os.Exit(1)
-			}
-		}
-
-		if m, ok := instance.(core.CoreModifier); ok {
-			err := m.ModifyCore()
-			if err != nil {
-				fmt.Printf("[FATAL] %s module failed to modify core: %s\n", mod.ID, err)
-				os.Exit(1)
-			}
-		}
-
-		if d, ok := instance.(core.Dependency); ok {
-			err := d.Inject()
-			if err != nil {
-				fmt.Printf("[FATAL] %s module failed to inject itself as a dependency: %s\n", mod.ID, err)
-				os.Exit(1)
-			}
-		}
-
-		if a, ok := instance.(core.App); ok {
-			apps = append(apps, a)
-		}
+	apps, err := ctx.Apps()
+	if err != nil {
+		fmt.Printf("[FATAL] %s\n", err)
+		os.Exit(1)
 	}
 
 	// TODO: improve startup (and shutdown) of apps.

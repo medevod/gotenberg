@@ -25,49 +25,48 @@ func (Ghostscript) Descriptor() core.ModuleDescriptor {
 	}
 }
 
-func (Ghostscript) ValidateOnRegistration() error {
-	// TODO: dedicated package for env var bin path?
+func (gs *Ghostscript) Provision(_ *core.Context) error {
 	path, ok := os.LookupEnv("GS_BIN_PATH")
 	if !ok {
 		return fmt.Errorf("'%s' environment variable is not set", "GS_BIN_PATH")
 	}
 
-	info, err := os.Stat(path)
+	gs.binPath = path
+
+	return nil
+}
+
+func (gs *Ghostscript) Validate() error {
+	info, err := os.Stat(gs.binPath)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("'%s': %w", path, err)
+		return fmt.Errorf("'%s': %w", gs.binPath, err)
 	}
 
 	if info.IsDir() {
-		return fmt.Errorf("'%s' is a directory", path)
+		return fmt.Errorf("'%s' is a directory", gs.binPath)
 	}
 
 	return nil
 }
 
-func (gs *Ghostscript) Provision(_ core.ParsedFlags) error {
-	gs.binPath = os.Getenv("GS_BIN_PATH")
-
-	return nil
-}
-
-func (gs *Ghostscript) Inject() error {
-	mergeRoute := &api.Route{
-		Method: fiber.MethodPost,
-		Path:   "api/merge",
-		Handlers: []fiber.Handler{
-			func(ctx *fiber.Ctx) {
-				ctx.Send("Foo")
+func (gs *Ghostscript) Routes() []*api.Route {
+	return []*api.Route{
+		{
+			Method: fiber.MethodGet,
+			Path:   "api/merge",
+			Handlers: []fiber.Handler{
+				func(ctx *fiber.Ctx) {
+					ctx.Send("Foo")
+				},
 			},
 		},
 	}
-
-	return api.RegisterRoute(mergeRoute)
 }
 
 // Interface guards.
 var (
-	_ core.Module                = (*Ghostscript)(nil)
-	_ core.RegistrationValidator = (*Ghostscript)(nil)
-	_ core.Provisioner           = (*Ghostscript)(nil)
-	_ core.Dependency            = (*Ghostscript)(nil)
+	_ core.Module      = (*Ghostscript)(nil)
+	_ core.Provisioner = (*Ghostscript)(nil)
+	_ core.Validator   = (*Ghostscript)(nil)
+	_ api.Router       = (*Ghostscript)(nil)
 )

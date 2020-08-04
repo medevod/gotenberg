@@ -31,12 +31,8 @@ type ModuleDescriptor struct {
 	New func() Module
 }
 
-type RegistrationValidator interface {
-	ValidateOnRegistration() error
-}
-
 type Provisioner interface {
-	Provision(ParsedFlags) error
+	Provision(*Context) error
 }
 
 type Validator interface {
@@ -45,10 +41,6 @@ type Validator interface {
 
 type CoreModifier interface {
 	ModifyCore() error
-}
-
-type Dependency interface {
-	Inject() error
 }
 
 type App interface {
@@ -71,30 +63,23 @@ func MustRegisterModule(mod Module) {
 		panic("module New function cannot return a nil instance")
 	}
 
-	modulesMu.Lock()
-	defer modulesMu.Unlock()
+	descriptorsMu.Lock()
+	defer descriptorsMu.Unlock()
 
-	if _, ok := modules[string(desc.ID)]; ok {
-		panic(fmt.Sprintf("%s module is already registered", desc.ID))
+	if _, ok := descriptors[string(desc.ID)]; ok {
+		panic(fmt.Sprintf("module '%s' is already registered", desc.ID))
 	}
 
-	if v, ok := mod.(RegistrationValidator); ok {
-		err := v.ValidateOnRegistration()
-		if err != nil {
-			panic(fmt.Sprintf("%s module validation failed on registration: %s", desc.ID, err))
-		}
-	}
-
-	modules[string(desc.ID)] = desc
+	descriptors[string(desc.ID)] = desc
 }
 
-func GetModules() []ModuleDescriptor {
-	modulesMu.RLock()
-	defer modulesMu.RUnlock()
+func GetModuleDescriptors() []ModuleDescriptor {
+	descriptorsMu.RLock()
+	defer descriptorsMu.RUnlock()
 
 	var mods []ModuleDescriptor
-	for _, m := range modules {
-		mods = append(mods, m)
+	for _, desc := range descriptors {
+		mods = append(mods, desc)
 	}
 
 	sort.Slice(mods, func(i, j int) bool {
@@ -105,6 +90,6 @@ func GetModules() []ModuleDescriptor {
 }
 
 var (
-	modules   = make(map[string]ModuleDescriptor)
-	modulesMu sync.RWMutex
+	descriptors   = make(map[string]ModuleDescriptor)
+	descriptorsMu sync.RWMutex
 )

@@ -31,7 +31,9 @@ func (Logging) Descriptor() core.ModuleDescriptor {
 	}
 }
 
-func (log *Logging) Provision(flags core.ParsedFlags) error {
+func (log *Logging) Provision(ctx *core.Context) error {
+	flags := ctx.ParsedFlags()
+
 	log.level = strings.ToLower(flags.MustString("log-level"))
 	log.format = strings.ToLower(flags.MustString("log-format"))
 

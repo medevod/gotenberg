@@ -10,7 +10,7 @@ type ParsedFlags struct {
 
 // MustString returns the string value of a
 // flag given by name. It panics if an error occurs.
-func (f ParsedFlags) MustString(name string) string {
+func (f *ParsedFlags) MustString(name string) string {
 	val, err := f.GetString(name)
 	if err != nil {
 		panic(err)
@@ -21,7 +21,7 @@ func (f ParsedFlags) MustString(name string) string {
 
 // MustBool returns the boolean value of a
 // flag given by name. It panics if an error occurs.
-func (f ParsedFlags) MustBool(name string) bool {
+func (f *ParsedFlags) MustBool(name string) bool {
 	val, err := f.GetBool(name)
 	if err != nil {
 		panic(err)
@@ -32,7 +32,7 @@ func (f ParsedFlags) MustBool(name string) bool {
 
 // MustInt returns the int value of a
 // flag given by name. It panics if an error occurs.
-func (f ParsedFlags) MustInt(name string) int {
+func (f *ParsedFlags) MustInt(name string) int {
 	val, err := f.GetInt(name)
 	if err != nil {
 		panic(err)
@@ -43,7 +43,7 @@ func (f ParsedFlags) MustInt(name string) int {
 
 // MustFloat returns the float value of a
 // flag given by name. It panics if an error occurs.
-func (f ParsedFlags) MustFloat(name string) float64 {
+func (f *ParsedFlags) MustFloat(name string) float64 {
 	val, err := f.GetFloat64(name)
 	if err != nil {
 		panic(err)
