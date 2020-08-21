@@ -3,91 +3,53 @@ package core
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap"
 	"reflect"
 )
 
 type Context struct {
 	context.Context
-	flags           *ParsedFlags
-	moduleInstances map[string]interface{}
+	descriptors     []ModuleDescriptor
+	flags           ParsedFlags
+	moduleInstances map[ModuleID]interface{}
 }
 
-func NewContext(ctx context.Context, flags *ParsedFlags) *Context {
+func NewContext(
+	ctx context.Context,
+	descriptors []ModuleDescriptor,
+	flags ParsedFlags,
+) *Context {
 	// TODO cancel?
 	newCtx := &Context{
 		Context:         ctx,
+		descriptors:     descriptors,
 		flags:           flags,
-		moduleInstances: make(map[string]interface{}),
+		moduleInstances: make(map[ModuleID]interface{}),
 	}
 
 	return newCtx
 }
 
-func (ctx *Context) ParsedFlags() *ParsedFlags {
+func (ctx *Context) ParsedFlags() ParsedFlags {
 	return ctx.flags
-}
-
-func (ctx *Context) Apps() ([]App, error) {
-	descriptorsMu.RLock()
-	defer descriptorsMu.RUnlock()
-
-	var apps []App
-	for _, desc := range descriptors {
-		mod := desc.New()
-
-		if app, ok := mod.(App); ok {
-			err := ctx.loadModule(string(desc.ID), app)
-			if err != nil {
-				return nil, err
-			}
-
-			apps = append(apps, app)
-		}
-	}
-
-	return apps, nil
-}
-
-func (ctx *Context) CoreModifiers() error {
-	descriptorsMu.RLock()
-	defer descriptorsMu.RUnlock()
-
-	for _, desc := range descriptors {
-		mod := desc.New()
-
-		if modifier, ok := mod.(CoreModifier); ok {
-			if err := ctx.loadModule(string(desc.ID), modifier); err != nil {
-				return err
-			}
-
-			if err := modifier.ModifyCore(); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 func (ctx *Context) Modules(kind interface{}) ([]interface{}, error) {
 	realKind := reflect.TypeOf(kind).Elem()
 
-	descriptorsMu.RLock()
-	defer descriptorsMu.RUnlock()
-
 	var mods []interface{}
-	for _, desc := range descriptors {
+	for _, desc := range ctx.descriptors {
 		newInstance := desc.New()
 
 		if ok := reflect.TypeOf(newInstance).Implements(realKind); ok {
 			// The module implements the requested interface.
 			// We check if it has already been initialized.
-			instance, ok := ctx.moduleInstances[string(desc.ID)]
+			instance, ok := ctx.moduleInstances[desc.ID]
 
 			if ok {
 				mods = append(mods, instance)
 			} else {
-				err := ctx.loadModule(string(desc.ID), newInstance)
+				err := ctx.loadModule(desc.ID, newInstance)
 				if err != nil {
 					return nil, err
 				}
@@ -100,7 +62,7 @@ func (ctx *Context) Modules(kind interface{}) ([]interface{}, error) {
 	return mods, nil
 }
 
-func (ctx *Context) loadModule(ID string, instance interface{}) error {
+func (ctx *Context) loadModule(ID ModuleID, instance interface{}) error {
 	if prov, ok := instance.(Provisioner); ok {
 		// The instance can be provisioned.
 		err := prov.Provision(ctx)
@@ -120,4 +82,12 @@ func (ctx *Context) loadModule(ID string, instance interface{}) error {
 	ctx.moduleInstances[ID] = instance
 
 	return nil
+}
+
+func (ctx *Context) NewLogger(mod Module) *zap.Logger {
+	modID := string(mod.Descriptor().ID)
+
+	return Log().With(
+		zap.String("module", modID),
+	)
 }

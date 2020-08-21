@@ -1,4 +1,5 @@
 # Build.
+GOLANG_VERSION=1.15
 GOTENBERG_VERSION=snapshot
 TINI_VERSION=0.19.0
 GOTENBERG_USER_GID=1001
@@ -11,6 +12,7 @@ DOCKER_REGISTRY=thecodingmachine
 
 image:
 	docker build \
+	--build-arg GOLANG_VERSION=$(GOLANG_VERSION) \
 	--build-arg GOTENBERG_VERSION=$(GOTENBERG_VERSION) \
 	--build-arg GOTENBERG_USER_GID=$(GOTENBERG_USER_GID) \
 	--build-arg GOTENBERG_USER_UID=$(GOTENBERG_USER_UID) \
@@ -26,4 +28,4 @@ test:
 	go test -race -cover ./...
 
 lint:
-	 golangci-lint run --enable-all --disable gomnd --disable goerr113 --disable gochecknoglobals --disable gochecknoinits
+	golangci-lint run --enable-all --disable gomnd --disable goerr113 --disable gochecknoglobals --disable gochecknoinits

@@ -1,13 +1,13 @@
 package main
 
 import (
-	"github.com/gotenberg/gotenberg/v7/internal/cmd"
+	"github.com/thecodingmachine/gotenberg/v7/internal/app/gotenberg"
 
-	_ "github.com/gotenberg/gotenberg/v7/pkg/modules/api"
-	_ "github.com/gotenberg/gotenberg/v7/pkg/modules/ghostscript"
-	_ "github.com/gotenberg/gotenberg/v7/pkg/modules/logging"
+	_ "github.com/thecodingmachine/gotenberg/v7/pkg/modules/api"
+	_ "github.com/thecodingmachine/gotenberg/v7/pkg/modules/logging"
+	_ "github.com/thecodingmachine/gotenberg/v7/pkg/modules/pdftk"
 )
 
 func main() {
-	cmd.Run()
+	gotenberg.Run()
 }

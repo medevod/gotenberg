@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/gotenberg/gotenberg/v7/pkg/core"
 	flag "github.com/spf13/pflag"
+	"github.com/thecodingmachine/gotenberg/v7/pkg/core"
 )
 
 func init() {
@@ -22,7 +22,7 @@ func (Logging) Descriptor() core.ModuleDescriptor {
 		ID: "Logging",
 		FlagSet: func() *flag.FlagSet {
 			fs := flag.NewFlagSet("logging", flag.ExitOnError)
-			fs.String("log-level", "error", "Set the log level - either error, warn, info or debug")
+			fs.String("log-level", "info", "Set the log level - either error, warn, info or debug")
 			fs.String("log-format", "auto", "Set log format - either auto, text or json")
 
 			return fs
@@ -65,7 +65,7 @@ func (log *Logging) Validate() error {
 }
 
 func (log *Logging) ModifyCore() error {
-	return core.ModifiyLogger(log.level, log.format)
+	return core.ModifyLogger(log.level, log.format)
 }
 
 // Interface guards.

@@ -11,13 +11,13 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
-func ModifiyLogger(level, format string) error {
-	lvl, err := zapLevel(level)
+func ModifyLogger(level, format string) error {
+	lvl, err := newLogLevel(level)
 	if err != nil {
 		return err
 	}
 
-	encoder, err := zapEncoder(format)
+	encoder, err := newLogEncoder(format)
 	if err != nil {
 		return err
 	}
@@ -32,7 +32,7 @@ func ModifiyLogger(level, format string) error {
 	return nil
 }
 
-func zapLevel(level string) (zapcore.Level, error) {
+func newLogLevel(level string) (zapcore.Level, error) {
 	switch level {
 	case "error":
 		return zap.ErrorLevel, nil
@@ -47,7 +47,7 @@ func zapLevel(level string) (zapcore.Level, error) {
 	}
 }
 
-func zapEncoder(format string) (zapcore.Encoder, error) {
+func newLogEncoder(format string) (zapcore.Encoder, error) {
 	isTerminal := terminal.IsTerminal(int(os.Stdout.Fd()))
 	encCfg := zap.NewProductionEncoderConfig()
 

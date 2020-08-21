@@ -1,4 +1,4 @@
-package cmd
+package gotenberg
 
 import (
 	"context"
@@ -6,11 +6,15 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/gotenberg/gotenberg/v7/pkg/core"
 	flag "github.com/spf13/pflag"
+	"github.com/thecodingmachine/gotenberg/v7/pkg/core"
 )
 
+var version = "snapshot"
+
 func Run() {
+	fmt.Printf("Gotenberg version %s\n", version)
+
 	// Creates the root FlagSet.
 	fs := flag.NewFlagSet("gotenberg", flag.ExitOnError)
 
@@ -29,16 +33,24 @@ func Run() {
 	}
 
 	// ...and creates a wrapper around those.
-	parsedFlags := &core.ParsedFlags{FlagSet: fs}
+	parsedFlags := core.ParsedFlags{FlagSet: fs}
 
-	ctx := core.NewContext(context.Background(), parsedFlags)
+	ctx := core.NewContext(context.Background(), descriptors, parsedFlags)
 
-	if err := ctx.CoreModifiers(); err != nil {
+	modifiers, err := ctx.Modules(new(core.CoreModifier))
+	if err != nil {
 		fmt.Printf("[FATAL] %s\n", err)
 		os.Exit(1)
 	}
 
-	apps, err := ctx.Apps()
+	for _, modifier := range modifiers {
+		if err := modifier.(core.CoreModifier).ModifyCore(); err != nil {
+			fmt.Printf("[FATAL] %s\n", err)
+			os.Exit(1)
+		}
+	}
+
+	apps, err := ctx.Modules(new(core.App))
 	if err != nil {
 		fmt.Printf("[FATAL] %s\n", err)
 		os.Exit(1)
@@ -53,7 +65,7 @@ func Run() {
 				// TODO print module ID.
 				fmt.Println(err)
 			}
-		}(app)
+		}(app.(core.App))
 	}
 
 	quit := make(chan os.Signal, 1)
@@ -72,7 +84,7 @@ func Run() {
 				// TODO print module ID.
 				fmt.Println(err)
 			}
-		}(app)
+		}(app.(core.App))
 	}
 
 	os.Exit(0)

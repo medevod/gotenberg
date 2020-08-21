@@ -1,11 +1,34 @@
-# TODO arch (amd64 and arm64).
-# TODO add the gotenberg binary (with correct arch).
-# TODO update Tini according to arch.
-FROM ubuntu:20.04
-
 # Note: ARG instructions do not create additional layers.
 # Instead, next layers will concatenate them.
+ARG GOLANG_VERSION
 ARG GOTENBERG_VERSION
+
+# TODO arch (amd64 and arm64).
+FROM golang:$GOLANG_VERSION AS builder
+
+ENV GOOS=linux \
+    GOARCH=amd64 \
+    CGO_ENABLED=0
+
+# Define the working directory outside of $GOPATH (we're using go modules).
+WORKDIR /home
+
+# Install module dependencies.
+COPY go.mod go.sum ./
+
+RUN go mod download &&\
+    go mod verify
+
+# Copy the source code.
+COPY cmd ./cmd
+COPY internal ./internal
+COPY pkg ./pkg
+
+# Build the binary.
+RUN go build -o gotenberg -ldflags "-X gotenberg.version=$GOTENBERG_VERSION" cmd/gotenberg/main.go
+
+# TODO update Tini according to arch.
+FROM ubuntu:20.04
 
 LABEL author="Julien Neuhart" \
       description="A Docker-powered stateless API for converting HTML, Markdown and Office documents to PDF." \
@@ -69,8 +92,8 @@ RUN \
     wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - &&\
     echo "deb http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list &&\
     apt-get update -qq &&\
-    # Install Ghostscript, Google Chrome and LibreOffice.
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ghostscript google-chrome-stable libreoffice &&\
+    # Install PDFtk, Google Chrome and LibreOffice.
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends pdftk google-chrome-stable libreoffice &&\
     # Download unoconv (Python script).
     curl -Ls https://raw.githubusercontent.com/gotenberg/unoconv/master/unoconv -o /usr/bin/unoconv &&\
     chmod +x /usr/bin/unoconv &&\
@@ -91,13 +114,16 @@ RUN \
     # See https://stackoverflow.com/a/24417119/3248473.
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* &&\
     # Print versions of main dependencies.
-    ghostscript --version &&\
+    pdftk --version &&\
     google-chrome-stable --version &&\
     libreoffice --version &&\
     unoconv --version
 
+# Copy the Gotenberg binary from the builder stage.
+COPY --from=builder /home/gotenberg /usr/bin/
+
 # Environment variables required by modules.
-ENV GS_BIN_PATH="/usr/bin/gs"
+ENV PDFTK_BIN_PATH="/usr/bin/pdftk"
 
 USER gotenberg
 WORKDIR /home/gotenberg
