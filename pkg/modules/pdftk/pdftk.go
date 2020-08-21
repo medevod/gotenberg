@@ -66,7 +66,6 @@ func (tk *PDFtk) Routes() []*api.Route {
 			Path:   "api/merge",
 			Handlers: []fiber.Handler{
 				func(ctx *fiber.Ctx) {
-					ctx.Attachment()
 					res, err := api.NewResources(ctx)
 					if err != nil {
 						ctx.Next(err)
